@@ -1,0 +1,55 @@
+# Argo CD Application for the NVIDIA GPU Operator (stagelab conventions:
+# upstream chart, inline values, project default, manual sync).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gpu-operator
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gpu-operator
+  source:
+    repoURL: https://helm.ngc.nvidia.com/nvidia
+    chart: gpu-operator
+    targetRevision: v26.7.2
+    helm:
+      values: |
+        # NFD labels the node with pci-10de.present=true; the operator then
+        # deploys its operands only on nodes with an NVIDIA GPU (kube-worker-12fwb).
+        nfd:
+          enabled: true
+        cdi:
+          enabled: true
+        driver:
+          enabled: true
+          repository: ghcr.io/manustars
+          image: driver
+          # The operator appends "-fedora43" from the node's os-release
+          version: "595.91.07"
+          kernelModuleType: open
+          # Modules are compiled at every pod start: give it time
+          startupProbe:
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 60
+            failureThreshold: 120
+          upgradePolicy:
+            autoUpgrade: false
+        toolkit:
+          enabled: true
+          # /usr/local is writable on bootc (symlink to /var/usrlocal)
+          installDir: /usr/local/nvidia
+        devicePlugin:
+          enabled: true
+        dcgmExporter:
+          enabled: true
+        migManager:
+          enabled: false
+        sandboxWorkloads:
+          enabled: false
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

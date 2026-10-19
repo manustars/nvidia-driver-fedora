@@ -1,0 +1,86 @@
+# Caps the GPU power limit (temperatures). The limit is lost whenever the
+# driver is reloaded, so the pod re-checks it every 5 minutes. It uses the
+# nvidia-smi of the driver container root (/run/nvidia/driver) and requests no
+# nvidia.com/gpu, so it does not take the GPU away from workloads.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gpu-power-limit
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gpu-operator
+  source:
+    repoURL: https://bedag.github.io/helm-charts/
+    chart: raw
+    targetRevision: 2.0.2
+    helm:
+      values: |
+        resources:
+          - apiVersion: apps/v1
+            kind: DaemonSet
+            metadata:
+              name: gpu-power-limit
+              labels:
+                app: gpu-power-limit
+            spec:
+              selector:
+                matchLabels:
+                  app: gpu-power-limit
+              template:
+                metadata:
+                  labels:
+                    app: gpu-power-limit
+                spec:
+                  nodeSelector:
+                    nvidia.com/gpu.present: "true"
+                  tolerations:
+                    - key: nvidia.com/gpu
+                      operator: Exists
+                  priorityClassName: system-node-critical
+                  terminationGracePeriodSeconds: 5
+                  containers:
+                    - name: power-limit
+                      image: busybox:1.37.0
+                      env:
+                        - name: POWER_LIMIT_W
+                          value: "130"
+                      command: ["/bin/sh", "-c"]
+                      args:
+                        - |
+                          smi() { chroot /run/nvidia/driver nvidia-smi "$@"; }
+                          until smi -L >/dev/null 2>&1; do
+                            echo "waiting for the NVIDIA driver..."; sleep 30
+                          done
+                          while true; do
+                            for cur in $(smi --query-gpu=power.limit --format=csv,noheader,nounits | cut -d. -f1); do
+                              if [ "$cur" != "$POWER_LIMIT_W" ]; then
+                                echo "power limit is ${cur} W, setting ${POWER_LIMIT_W} W"
+                                smi -pl "$POWER_LIMIT_W"
+                              fi
+                            done
+                            sleep 300
+                          done
+                      securityContext:
+                        privileged: true
+                      resources:
+                        requests:
+                          cpu: 5m
+                          memory: 16Mi
+                        limits:
+                          memory: 64Mi
+                      volumeMounts:
+                        - name: run-nvidia
+                          mountPath: /run/nvidia
+                          mountPropagation: HostToContainer
+                  volumes:
+                    - name: run-nvidia
+                      hostPath:
+                        path: /run/nvidia
+                        type: DirectoryOrCreate
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

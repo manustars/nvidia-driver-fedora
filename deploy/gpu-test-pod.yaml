@@ -1,0 +1,18 @@
+# One-shot check: kubectl apply -f, then kubectl logs -n gpu-operator gpu-test
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-test
+  namespace: gpu-operator
+spec:
+  restartPolicy: Never
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+  containers:
+    - name: cuda
+      image: nvcr.io/nvidia/cuda:13.3.1-base-ubi9
+      command: ["nvidia-smi"]
+      resources:
+        limits:
+          nvidia.com/gpu: 1
