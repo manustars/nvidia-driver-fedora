@@ -1,0 +1,54 @@
+# Chat UI for the local LLM (app "llm"), on http://chat.192.168.200.240.nip.io.
+# Runs on the control plane (the GPU worker is tainted). The first account
+# created becomes admin; disable sign-up afterwards from Admin > Settings.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: open-webui
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: open-webui
+  source:
+    repoURL: https://helm.openwebui.com/
+    chart: open-webui
+    targetRevision: 17.0.0
+    helm:
+      values: |
+        image:
+          tag: v0.12.3
+        ollama:
+          enabled: false
+        pipelines:
+          enabled: false
+        # Single replica: in-memory websocket manager, no Redis
+        websocket:
+          enabled: true
+          manager: ""
+          redis:
+            enabled: false
+        enableOpenaiApi: true
+        openaiBaseApiUrl: http://llama-swap.llm.svc.cluster.local:8080/v1
+        # llama-swap has no auth; Open WebUI just needs a non-empty key
+        openaiApiKey: none
+        extraEnvVars:
+          # First request waits for llama-swap to load the model
+          - name: AIOHTTP_CLIENT_TIMEOUT
+            value: "900"
+          - name: ENABLE_OLLAMA_API
+            value: "False"
+        persistence:
+          enabled: true
+          size: 5Gi
+          # Created by the "llm" app; binds on the node the pod lands on
+          storageClass: topolvm-local
+        ingress:
+          enabled: true
+          class: nginx
+          host: chat.192.168.200.240.nip.io
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

@@ -1,0 +1,186 @@
+# Local LLM on the GPU worker: llama-swap starts llama-server (Qwen3.8-27B,
+# unsloth UD-IQ3_XXS GGUF, ~10.9 GB) on the first request and stops it after
+# `ttl` seconds idle, freeing the VRAM. OpenAI-compatible API on
+# http://llama-swap.llm.svc:8080/v1 (cluster-internal, no auth).
+#
+# Sizing (RTX 3060 12 GB): the 4-bit builds (16-19 GB) do not fit; IQ3_XXS
+# leaves ~1 GB for a q8_0 KV cache, i.e. 16k tokens of context (only 16 of the
+# 64 layers use full attention: ~32 KiB/token with q8_0).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: llm
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: llm
+  source:
+    repoURL: https://bedag.github.io/helm-charts/
+    chart: raw
+    targetRevision: 2.0.2
+    helm:
+      values: |
+        resources:
+          # topolvm-provisioner binds immediately and may pick the wrong node;
+          # this class creates the volume on the node where the pod lands.
+          - apiVersion: storage.k8s.io/v1
+            kind: StorageClass
+            metadata:
+              name: topolvm-local
+            provisioner: topolvm.io
+            parameters:
+              csi.storage.k8s.io/fstype: xfs
+            volumeBindingMode: WaitForFirstConsumer
+            allowVolumeExpansion: true
+            reclaimPolicy: Retain
+
+          - apiVersion: v1
+            kind: PersistentVolumeClaim
+            metadata:
+              name: models
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              storageClassName: topolvm-local
+              resources:
+                requests:
+                  storage: 40Gi
+
+          - apiVersion: v1
+            kind: ConfigMap
+            metadata:
+              name: llama-swap
+            data:
+              config.yaml: |
+                # Model load from disk can take a while on a cold page cache
+                healthCheckTimeout: 600
+                models:
+                  qwen3.8-27b:
+                    name: Qwen3.8 27B (IQ3_XXS)
+                    # Unload after 15 minutes without requests
+                    ttl: 900
+                    cmd: |
+                      llama-server
+                      --host 127.0.0.1 --port ${PORT}
+                      --model /models/Qwen3.8-27B-UD-IQ3_XXS.gguf
+                      --alias qwen3.8-27b
+                      --n-gpu-layers 999
+                      --ctx-size 16384
+                      --flash-attn on
+                      --cache-type-k q8_0 --cache-type-v q8_0
+                      --parallel 1
+                      --jinja
+                      --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0
+
+          - apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: llama-swap
+              labels:
+                app: llama-swap
+            spec:
+              replicas: 1
+              # Single GPU: never run two pods at once
+              strategy:
+                type: Recreate
+              selector:
+                matchLabels:
+                  app: llama-swap
+              template:
+                metadata:
+                  labels:
+                    app: llama-swap
+                spec:
+                  # Pinned to the GPU worker (only node with an NVIDIA GPU)
+                  nodeSelector:
+                    nvidia.com/gpu.present: "true"
+                    kubernetes.io/hostname: kube-worker-12fwb
+                  tolerations:
+                    - key: nvidia.com/gpu
+                      operator: Exists
+                      effect: NoSchedule
+                  initContainers:
+                    # Downloads the model once into the PVC (resumable, checksum verified)
+                    - name: fetch-model
+                      image: curlimages/curl:8.22.0
+                      securityContext:
+                        runAsUser: 0
+                      env:
+                        - name: MODEL_URL
+                          value: https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/4ca720788d1e01f1bff70c033e0d0028fd02e502/Qwen3.8-27B-UD-IQ3_XXS.gguf
+                        - name: MODEL_FILE
+                          value: /models/Qwen3.8-27B-UD-IQ3_XXS.gguf
+                        - name: MODEL_SHA256
+                          value: c0b7c3038681ed2e3040456c1dd45f9858b6c2290bed172c70388a94874f3eee
+                      command: ["/bin/sh", "-c"]
+                      args:
+                        - |
+                          set -e
+                          if [ -f "$MODEL_FILE" ]; then echo "model already present"; exit 0; fi
+                          echo "downloading $MODEL_URL"
+                          curl -fL --retry 10 --retry-delay 10 -C - -o "$MODEL_FILE.part" "$MODEL_URL"
+                          echo "$MODEL_SHA256  $MODEL_FILE.part" | sha256sum -c -
+                          mv "$MODEL_FILE.part" "$MODEL_FILE"
+                      volumeMounts:
+                        - name: models
+                          mountPath: /models
+                  containers:
+                    - name: llama-swap
+                      image: ghcr.io/mostlygeek/llama-swap:unified-cuda13-2026-10-18
+                      env:
+                        - name: LLAMA_SWAP_CONFIG
+                          value: /etc/llama-swap/config/config.yaml
+                        - name: LLAMA_SWAP_LISTEN
+                          value: 0.0.0.0:8080
+                        - name: LLAMA_SWAP_WATCH_CONFIG
+                          value: "true"
+                      ports:
+                        - name: http
+                          containerPort: 8080
+                      readinessProbe:
+                        httpGet:
+                          path: /health
+                          port: http
+                        periodSeconds: 10
+                      livenessProbe:
+                        httpGet:
+                          path: /health
+                          port: http
+                        periodSeconds: 30
+                        failureThreshold: 5
+                      resources:
+                        requests:
+                          cpu: "1"
+                          memory: 2Gi
+                        limits:
+                          nvidia.com/gpu: 1
+                          memory: 8Gi
+                      volumeMounts:
+                        - name: models
+                          mountPath: /models
+                        - name: config
+                          mountPath: /etc/llama-swap/config
+                  volumes:
+                    - name: models
+                      persistentVolumeClaim:
+                        claimName: models
+                    - name: config
+                      configMap:
+                        name: llama-swap
+
+          - apiVersion: v1
+            kind: Service
+            metadata:
+              name: llama-swap
+            spec:
+              selector:
+                app: llama-swap
+              ports:
+                - name: http
+                  port: 8080
+                  targetPort: http
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
