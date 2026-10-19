@@ -41,8 +41,8 @@ spec:
             autoUpgrade: false
         toolkit:
           enabled: true
-          # /usr/local is writable on bootc (symlink to /var/usrlocal)
-          installDir: /usr/local/nvidia
+          # /usr (and /usr/local) is read-only on the k4all bootc image
+          installDir: /var/lib/nvidia-container-toolkit
         devicePlugin:
           enabled: true
         dcgmExporter:
