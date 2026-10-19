@@ -1,0 +1,2608 @@
+{
+  "title": "LLM e GPU",
+  "uid": "llm-gpu",
+  "description": "Stato del modello, richieste e token di llama-swap, uso della GPU (DCGM).",
+  "tags": [
+    "gpu",
+    "llm",
+    "llama-swap"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "schemaVersion": 39,
+  "templating": {
+    "list": [
+      {
+        "name": "ds_prometheus",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {
+          "text": "prometheus",
+          "value": "prometheus"
+        },
+        "hide": 0,
+        "refresh": 1,
+        "regex": "",
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "name": "ds_llamaswap",
+        "label": "llama-swap",
+        "type": "datasource",
+        "query": "yesoreyeram-infinity-datasource",
+        "current": {
+          "text": "llama-swap",
+          "value": "llama-swap"
+        },
+        "hide": 0,
+        "refresh": 1,
+        "regex": "",
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "name": "node",
+        "label": "Nodo",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds_prometheus}"
+        },
+        "query": {
+          "query": "label_values(DCGM_FI_DEV_GPU_TEMP, node)",
+          "refId": "node"
+        },
+        "definition": "label_values(DCGM_FI_DEV_GPU_TEMP, node)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {},
+        "hide": 0,
+        "sort": 1,
+        "regex": "",
+        "allValue": ".*"
+      },
+      {
+        "name": "gpu",
+        "label": "GPU",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds_prometheus}"
+        },
+        "query": {
+          "query": "label_values(DCGM_FI_DEV_GPU_TEMP{node=~\"$node\"}, gpu)",
+          "refId": "gpu"
+        },
+        "definition": "label_values(DCGM_FI_DEV_GPU_TEMP{node=~\"$node\"}, gpu)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {},
+        "hide": 0,
+        "sort": 1,
+        "regex": "",
+        "allValue": ".*"
+      },
+      {
+        "name": "gpu_pod",
+        "label": "Pod GPU",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${ds_prometheus}"
+        },
+        "query": {
+          "query": "label_values(DCGM_FI_DEV_GPU_TEMP{node=~\"$node\"}, pod)",
+          "refId": "gpu_pod"
+        },
+        "definition": "label_values(DCGM_FI_DEV_GPU_TEMP{node=~\"$node\"}, pod)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {},
+        "hide": 2,
+        "sort": 1,
+        "regex": ""
+      },
+      {
+        "name": "model",
+        "label": "Modello",
+        "type": "query",
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "${ds_llamaswap}"
+        },
+        "query": {
+          "refId": "model",
+          "queryType": "infinity",
+          "infinityQuery": {
+            "refId": "model",
+            "type": "json",
+            "source": "url",
+            "parser": "backend",
+            "format": "table",
+            "url": "/v1/models",
+            "url_options": {
+              "method": "GET",
+              "params": []
+            },
+            "root_selector": "data",
+            "columns": [
+              {
+                "selector": "id",
+                "text": "id",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "refresh": 1,
+        "includeAll": true,
+        "multi": false,
+        "allValue": "",
+        "current": {},
+        "hide": 0,
+        "sort": 1,
+        "regex": ""
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "row",
+      "id": 1,
+      "title": "Stato del modello",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "id": 2,
+      "title": "Modello caricato",
+      "description": "Modello attualmente avviato da llama-swap (/running). Viene scaricato dopo il TTL di inattività.",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${ds_llamaswap}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "/running",
+          "url_options": {
+            "method": "GET",
+            "params": []
+          },
+          "root_selector": "running",
+          "columns": [
+            {
+              "selector": "model",
+              "text": "Modello",
+              "type": "string"
+            },
+            {
+              "selector": "state",
+              "text": "Stato",
+              "type": "string"
+            },
+            {
+              "selector": "ttl",
+              "text": "TTL",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "Nessun modello in VRAM"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^Modello$/"
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "id": 3,
+      "title": "Stato",
+      "description": "",
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${ds_llamaswap}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "/running",
+          "url_options": {
+            "method": "GET",
+            "params": []
+          },
+          "root_selector": "running",
+          "columns": [
+            {
+              "selector": "model",
+              "text": "Modello",
+              "type": "string"
+            },
+            {
+              "selector": "state",
+              "text": "Stato",
+              "type": "string"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "ready": {
+                  "text": "pronto",
+                  "color": "green"
+                },
+                "starting": {
+                  "text": "in caricamento",
+                  "color": "orange"
+                },
+                "stopping": {
+                  "text": "in arresto",
+                  "color": "orange"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "scarico"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^Stato$/"
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "state-timeline",
+      "id": 4,
+      "title": "Modello in VRAM",
+      "description": "Ricavato dalla VRAM occupata (oltre 1 GiB = modello caricato).",
+      "gridPos": {
+        "x": 9,
+        "y": 1,
+        "w": 15,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "max by (gpu) (max by (node, gpu) (DCGM_FI_DEV_FB_USED{node=~\"$node\", gpu=~\"$gpu\"})) > bool 1024",
+          "legendFormat": "GPU {{gpu}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Scarico",
+                  "color": "transparent"
+                },
+                "1": {
+                  "text": "Caricato",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": false
+        },
+        "alignValue": "center"
+      }
+    },
+    {
+      "type": "row",
+      "id": 5,
+      "title": "Richieste nel periodo selezionato",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "id": 6,
+      "title": "Richieste",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${ds_llamaswap}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "/api/metrics/activity",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "limit",
+                "value": "999"
+              },
+              {
+                "key": "start",
+                "value": "${__from:date:iso}"
+              },
+              {
+                "key": "end",
+                "value": "${__to:date:iso}"
+              },
+              {
+                "key": "model",
+                "value": "${model}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "timestamp",
+              "text": "Ora",
+              "type": "timestamp"
+            },
+            {
+              "selector": "model",
+              "text": "Modello",
+              "type": "string"
+            },
+            {
+              "selector": "resp_status_code",
+              "text": "HTTP",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.input_tokens",
+              "text": "Token input",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.output_tokens",
+              "text": "Token output",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.cache_tokens",
+              "text": "Token in cache",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.prompt_per_second",
+              "text": "Prompt tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.tokens_per_second",
+              "text": "Generazione tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "duration_ms",
+              "text": "Durata",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "count"
+          ],
+          "fields": "/^Ora$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "id": 7,
+      "title": "Token generati",
+      "description": "",
+      "gridPos": {
+        "x": 4,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${ds_llamaswap}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "/api/metrics/activity",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "limit",
+                "value": "999"
+              },
+              {
+                "key": "start",
+                "value": "${__from:date:iso}"
+              },
+              {
+                "key": "end",
+                "value": "${__to:date:iso}"
+              },
+              {
+                "key": "model",
+                "value": "${model}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "timestamp",
+              "text": "Ora",
+              "type": "timestamp"
+            },
+            {
+              "selector": "model",
+              "text": "Modello",
+              "type": "string"
+            },
+            {
+              "selector": "resp_status_code",
+              "text": "HTTP",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.input_tokens",
+              "text": "Token input",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.output_tokens",
+              "text": "Token output",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.cache_tokens",
+              "text": "Token in cache",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.prompt_per_second",
+              "text": "Prompt tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.tokens_per_second",
+              "text": "Generazione tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "duration_ms",
+              "text": "Durata",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "sum"
+          ],
+          "fields": "/^Token output$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "id": 8,
+      "title": "Token in input",
+      "description": "",
+      "gridPos": {
+        "x": 8,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${ds_llamaswap}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "/api/metrics/activity",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "limit",
+                "value": "999"
+              },
+              {
+                "key": "start",
+                "value": "${__from:date:iso}"
+              },
+              {
+                "key": "end",
+                "value": "${__to:date:iso}"
+              },
+              {
+                "key": "model",
+                "value": "${model}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "timestamp",
+              "text": "Ora",
+              "type": "timestamp"
+            },
+            {
+              "selector": "model",
+              "text": "Modello",
+              "type": "string"
+            },
+            {
+              "selector": "resp_status_code",
+              "text": "HTTP",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.input_tokens",
+              "text": "Token input",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.output_tokens",
+              "text": "Token output",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.cache_tokens",
+              "text": "Token in cache",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.prompt_per_second",
+              "text": "Prompt tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.tokens_per_second",
+              "text": "Generazione tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "duration_ms",
+              "text": "Durata",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "sum"
+          ],
+          "fields": "/^Token input$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "id": 9,
+      "title": "Velocità media generazione",
+      "description": "Token al secondo in generazione, media delle richieste nel periodo.",
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${ds_llamaswap}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "/api/metrics/activity",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "limit",
+                "value": "999"
+              },
+              {
+                "key": "start",
+                "value": "${__from:date:iso}"
+              },
+              {
+                "key": "end",
+                "value": "${__to:date:iso}"
+              },
+              {
+                "key": "model",
+                "value": "${model}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "timestamp",
+              "text": "Ora",
+              "type": "timestamp"
+            },
+            {
+              "selector": "model",
+              "text": "Modello",
+              "type": "string"
+            },
+            {
+              "selector": "resp_status_code",
+              "text": "HTTP",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.input_tokens",
+              "text": "Token input",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.output_tokens",
+              "text": "Token output",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.cache_tokens",
+              "text": "Token in cache",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.prompt_per_second",
+              "text": "Prompt tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.tokens_per_second",
+              "text": "Generazione tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "duration_ms",
+              "text": "Durata",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "noValue": "-"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "mean"
+          ],
+          "fields": "/^Generazione tok\\/s$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "id": 10,
+      "title": "Velocità media prompt",
+      "description": "",
+      "gridPos": {
+        "x": 16,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${ds_llamaswap}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "/api/metrics/activity",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "limit",
+                "value": "999"
+              },
+              {
+                "key": "start",
+                "value": "${__from:date:iso}"
+              },
+              {
+                "key": "end",
+                "value": "${__to:date:iso}"
+              },
+              {
+                "key": "model",
+                "value": "${model}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "timestamp",
+              "text": "Ora",
+              "type": "timestamp"
+            },
+            {
+              "selector": "model",
+              "text": "Modello",
+              "type": "string"
+            },
+            {
+              "selector": "resp_status_code",
+              "text": "HTTP",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.input_tokens",
+              "text": "Token input",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.output_tokens",
+              "text": "Token output",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.cache_tokens",
+              "text": "Token in cache",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.prompt_per_second",
+              "text": "Prompt tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.tokens_per_second",
+              "text": "Generazione tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "duration_ms",
+              "text": "Durata",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1,
+          "noValue": "-"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "mean"
+          ],
+          "fields": "/^Prompt tok\\/s$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "id": 11,
+      "title": "Durata media",
+      "description": "Include l'eventuale caricamento a freddo del modello.",
+      "gridPos": {
+        "x": 20,
+        "y": 6,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${ds_llamaswap}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "/api/metrics/activity",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "limit",
+                "value": "999"
+              },
+              {
+                "key": "start",
+                "value": "${__from:date:iso}"
+              },
+              {
+                "key": "end",
+                "value": "${__to:date:iso}"
+              },
+              {
+                "key": "model",
+                "value": "${model}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "timestamp",
+              "text": "Ora",
+              "type": "timestamp"
+            },
+            {
+              "selector": "model",
+              "text": "Modello",
+              "type": "string"
+            },
+            {
+              "selector": "resp_status_code",
+              "text": "HTTP",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.input_tokens",
+              "text": "Token input",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.output_tokens",
+              "text": "Token output",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.cache_tokens",
+              "text": "Token in cache",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.prompt_per_second",
+              "text": "Prompt tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.tokens_per_second",
+              "text": "Generazione tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "duration_ms",
+              "text": "Durata",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "-"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "mean"
+          ],
+          "fields": "/^Durata$/"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 12,
+      "title": "Velocità per richiesta",
+      "description": "Token/s di prompt e generazione di ogni richiesta.",
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${ds_llamaswap}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "/api/metrics/activity",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "limit",
+                "value": "999"
+              },
+              {
+                "key": "start",
+                "value": "${__from:date:iso}"
+              },
+              {
+                "key": "end",
+                "value": "${__to:date:iso}"
+              },
+              {
+                "key": "model",
+                "value": "${model}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "timestamp",
+              "text": "Ora",
+              "type": "timestamp"
+            },
+            {
+              "selector": "model",
+              "text": "Modello",
+              "type": "string"
+            },
+            {
+              "selector": "resp_status_code",
+              "text": "HTTP",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.input_tokens",
+              "text": "Token input",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.output_tokens",
+              "text": "Token output",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.cache_tokens",
+              "text": "Token in cache",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.prompt_per_second",
+              "text": "Prompt tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.tokens_per_second",
+              "text": "Generazione tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "duration_ms",
+              "text": "Durata",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "points",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "pointSize": 6,
+            "showPoints": "always",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(HTTP|Token .*|Durata)$"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": true,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 13,
+      "title": "Token per richiesta",
+      "description": "",
+      "gridPos": {
+        "x": 12,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${ds_llamaswap}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "/api/metrics/activity",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "limit",
+                "value": "999"
+              },
+              {
+                "key": "start",
+                "value": "${__from:date:iso}"
+              },
+              {
+                "key": "end",
+                "value": "${__to:date:iso}"
+              },
+              {
+                "key": "model",
+                "value": "${model}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "timestamp",
+              "text": "Ora",
+              "type": "timestamp"
+            },
+            {
+              "selector": "model",
+              "text": "Modello",
+              "type": "string"
+            },
+            {
+              "selector": "resp_status_code",
+              "text": "HTTP",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.input_tokens",
+              "text": "Token input",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.output_tokens",
+              "text": "Token output",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.cache_tokens",
+              "text": "Token in cache",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.prompt_per_second",
+              "text": "Prompt tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.tokens_per_second",
+              "text": "Generazione tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "duration_ms",
+              "text": "Durata",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 2,
+            "fillOpacity": 80,
+            "pointSize": 6,
+            "showPoints": "always",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "^(HTTP|Token in cache|.*tok/s|Durata)$"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": true,
+                  "tooltip": true,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "id": 14,
+      "title": "Ultime richieste",
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${ds_llamaswap}"
+          },
+          "type": "json",
+          "source": "url",
+          "parser": "backend",
+          "format": "table",
+          "url": "/api/metrics/activity",
+          "url_options": {
+            "method": "GET",
+            "params": [
+              {
+                "key": "limit",
+                "value": "999"
+              },
+              {
+                "key": "start",
+                "value": "${__from:date:iso}"
+              },
+              {
+                "key": "end",
+                "value": "${__to:date:iso}"
+              },
+              {
+                "key": "model",
+                "value": "${model}"
+              }
+            ]
+          },
+          "root_selector": "data",
+          "columns": [
+            {
+              "selector": "timestamp",
+              "text": "Ora",
+              "type": "timestamp"
+            },
+            {
+              "selector": "model",
+              "text": "Modello",
+              "type": "string"
+            },
+            {
+              "selector": "resp_status_code",
+              "text": "HTTP",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.input_tokens",
+              "text": "Token input",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.output_tokens",
+              "text": "Token output",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.cache_tokens",
+              "text": "Token in cache",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.prompt_per_second",
+              "text": "Prompt tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "tokens.tokens_per_second",
+              "text": "Generazione tok/s",
+              "type": "number"
+            },
+            {
+              "selector": "duration_ms",
+              "text": "Durata",
+              "type": "number"
+            }
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Durata"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*tok/s"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "HTTP"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 400
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Ora",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "row",
+      "id": 15,
+      "title": "GPU",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "gauge",
+      "id": 16,
+      "title": "Utilizzo GPU",
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "avg(max by (node, gpu) (DCGM_FI_DEV_GPU_UTIL{node=~\"$node\", gpu=~\"$gpu\"}))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "showThresholdMarkers": true,
+        "showThresholdLabels": false
+      }
+    },
+    {
+      "type": "gauge",
+      "id": 17,
+      "title": "VRAM occupata",
+      "gridPos": {
+        "x": 4,
+        "y": 27,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "100 * sum by (gpu) (max by (node, gpu) (DCGM_FI_DEV_FB_USED{node=~\"$node\", gpu=~\"$gpu\"})) / sum by (gpu) (max by (node, gpu) (DCGM_FI_DEV_FB_USED{node=~\"$node\", gpu=~\"$gpu\"}) + max by (node, gpu) (DCGM_FI_DEV_FB_FREE{node=~\"$node\", gpu=~\"$gpu\"}) + max by (node, gpu) (DCGM_FI_DEV_FB_RESERVED{node=~\"$node\", gpu=~\"$gpu\"}))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 85
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "showThresholdMarkers": true,
+        "showThresholdLabels": false
+      }
+    },
+    {
+      "type": "stat",
+      "id": 18,
+      "title": "Temperatura",
+      "description": "",
+      "gridPos": {
+        "x": 8,
+        "y": 27,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "max(max by (node, gpu) (DCGM_FI_DEV_GPU_TEMP{node=~\"$node\", gpu=~\"$gpu\"}))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "id": 19,
+      "title": "Potenza",
+      "description": "",
+      "gridPos": {
+        "x": 12,
+        "y": 27,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "sum(max by (node, gpu) (DCGM_FI_DEV_POWER_USAGE{node=~\"$node\", gpu=~\"$gpu\"}))",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "id": 20,
+      "title": "Energia nel periodo",
+      "description": "Energia consumata dalla GPU nel periodo selezionato (contatore DCGM in mJ).",
+      "gridPos": {
+        "x": 16,
+        "y": 27,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "sum(increase((max by (node, gpu) (DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION{node=~\"$node\", gpu=~\"$gpu\"}))[$__range:1m])) / 3.6e9",
+          "legendFormat": "",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatth",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 3
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "id": 21,
+      "title": "Processo sulla GPU",
+      "description": "Pod che ha la GPU assegnata (etichetta di dcgm-exporter).",
+      "gridPos": {
+        "x": 20,
+        "y": 27,
+        "w": 4,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "topk(1, max by (pod) (timestamp(DCGM_FI_DEV_GPU_TEMP{node=~\"$node\", gpu=~\"$gpu\", pod!=\"\"})))",
+          "legendFormat": "{{pod}}",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "nessuno"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "name",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 22,
+      "title": "Utilizzo GPU e memoria",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "max by (node, gpu) (DCGM_FI_DEV_GPU_UTIL{node=~\"$node\", gpu=~\"$gpu\"})",
+          "legendFormat": "GPU {{gpu}} calcolo"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "max by (node, gpu) (DCGM_FI_DEV_MEM_COPY_UTIL{node=~\"$node\", gpu=~\"$gpu\"})",
+          "legendFormat": "GPU {{gpu}} banda memoria"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 23,
+      "title": "VRAM",
+      "description": "",
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "max by (node, gpu) (DCGM_FI_DEV_FB_USED{node=~\"$node\", gpu=~\"$gpu\"}) * 1048576",
+          "legendFormat": "GPU {{gpu}} usata"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "(max by (node, gpu) (DCGM_FI_DEV_FB_USED{node=~\"$node\", gpu=~\"$gpu\"}) + max by (node, gpu) (DCGM_FI_DEV_FB_FREE{node=~\"$node\", gpu=~\"$gpu\"}) + max by (node, gpu) (DCGM_FI_DEV_FB_RESERVED{node=~\"$node\", gpu=~\"$gpu\"})) * 1048576",
+          "legendFormat": "GPU {{gpu}} totale"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*totale"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 24,
+      "title": "Temperatura",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "max by (node, gpu) (DCGM_FI_DEV_GPU_TEMP{node=~\"$node\", gpu=~\"$gpu\"})",
+          "legendFormat": "GPU {{gpu}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "pointSize": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 25,
+      "title": "Potenza",
+      "description": "",
+      "gridPos": {
+        "x": 8,
+        "y": 40,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "max by (node, gpu) (DCGM_FI_DEV_POWER_USAGE{node=~\"$node\", gpu=~\"$gpu\"})",
+          "legendFormat": "GPU {{gpu}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 26,
+      "title": "Frequenze",
+      "description": "",
+      "gridPos": {
+        "x": 16,
+        "y": 40,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "max by (node, gpu) (DCGM_FI_DEV_SM_CLOCK{node=~\"$node\", gpu=~\"$gpu\"})",
+          "legendFormat": "GPU {{gpu}} SM"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "max by (node, gpu) (DCGM_FI_DEV_MEM_CLOCK{node=~\"$node\", gpu=~\"$gpu\"})",
+          "legendFormat": "GPU {{gpu}} memoria"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "rotmhz",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "pointSize": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "id": 27,
+      "title": "Nodo GPU",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 48,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 28,
+      "title": "CPU del nodo",
+      "description": "",
+      "gridPos": {
+        "x": 0,
+        "y": 49,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "avg by (node) (llamaswap_cpu_util_percent{node=~\"$node\"})",
+          "legendFormat": "{{node}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 29,
+      "title": "RAM del nodo",
+      "description": "",
+      "gridPos": {
+        "x": 8,
+        "y": 49,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "llamaswap_memory_used_bytes{node=~\"$node\"}",
+          "legendFormat": "{{node}} usata"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "llamaswap_memory_total_bytes{node=~\"$node\"}",
+          "legendFormat": "{{node}} totale"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*totale"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 30,
+      "title": "Memoria del processo GPU",
+      "description": "Memoria di sistema del pod che usa la GPU (include la cache del file del modello).",
+      "gridPos": {
+        "x": 16,
+        "y": 49,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${ds_prometheus}"
+          },
+          "expr": "sum by (pod) (container_memory_working_set_bytes{pod=~\"$gpu_pod\", container!=\"\", container!=\"POD\"})",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "pointSize": 6,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    }
+  ]
+}

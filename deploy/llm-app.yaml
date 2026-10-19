@@ -55,6 +55,10 @@ spec:
               config.yaml: |
                 # Model load from disk can take a while on a cold page cache
                 healthCheckTimeout: 600
+                # Request history (tokens, speed) kept across restarts,
+                # read by Grafana through /api/metrics/activity
+                store:
+                  path: /models/llama-swap-activity.sqlite
                 models:
                   qwen3.8-27b:
                     name: Qwen3.8 27B (IQ3_XXS)
