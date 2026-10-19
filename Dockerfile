@@ -1,38 +1,42 @@
-ARG FEDORA_VERSION=36
+ARG FEDORA_VERSION=43
+ARG CUDA_IMAGE=nvcr.io/nvidia/cuda:13.3.1-base-ubi9
 
-FROM nvcr.io/nvidia/cuda:13.1.1-base-ubi8 as build
+# Only used to ship the NGC DL license file, as the upstream images do.
+FROM ${CUDA_IMAGE} AS cuda
+
+FROM fedora:${FEDORA_VERSION} AS build
 
 ARG TARGETARCH
+ARG GOLANG_VERSION=1.27.2
+
+# Arg to indicate if driver type is either of passthrough/baremetal or vgpu
+ARG DRIVER_TYPE=passthrough
 
 SHELL ["/bin/bash", "-c"]
 
-RUN dnf install -y git wget
-
-ENV GOLANG_VERSION=1.21.5
+RUN dnf install -y --setopt=install_weak_deps=False git-core tar gzip && dnf clean all
 
 # download appropriate binary based on the target architecture for multi-arch builds
 RUN OS_ARCH=${TARGETARCH/x86_64/amd64} && OS_ARCH=${OS_ARCH/aarch64/arm64} && \
-    curl https://dl.google.com/go/go${GOLANG_VERSION}.linux-${OS_ARCH}.tar.gz \
+    curl -fsSL https://go.dev/dl/go${GOLANG_VERSION}.linux-${OS_ARCH}.tar.gz \
     | tar -C /usr/local -xz
 
-ENV PATH /usr/local/go/bin:$PATH
+ENV PATH=/usr/local/go/bin:$PATH
 
 WORKDIR /work
 
-RUN git clone https://github.com/NVIDIA/gpu-driver-container driver && \
+# vgpu-util is only needed for vGPU guests; keep the stage cheap otherwise.
+RUN touch /work/vgpu-util.placeholder && \
+    if [ "$DRIVER_TYPE" = "vgpu" ]; then \
+    git clone --depth 1 https://github.com/NVIDIA/gpu-driver-container driver && \
     cd driver/vgpu/src && \
     go build -o vgpu-util && \
-    mv vgpu-util /work
-
-ARG FEDORA_VERSION=36
+    mv vgpu-util /work; fi
 
 FROM fedora:${FEDORA_VERSION}
 
 ARG TARGETARCH
 ENV TARGETARCH=$TARGETARCH
-
-ARG KERNEL_TYPE
-ENV KERNEL_TYPE=$KERNEL_TYPE
 
 ARG HTTP_PROXY
 ENV HTTP_PROXY=$HTTP_PROXY
@@ -46,6 +50,10 @@ ARG BASE_URL=https://us.download.nvidia.com/tesla
 ENV BASE_URL=${BASE_URL}
 ARG DRIVER_VERSION
 ENV DRIVER_VERSION=$DRIVER_VERSION
+# Major version of the driver (e.g. 595), used to pick the kernel module type
+ARG DRIVER_BRANCH
+ENV DRIVER_BRANCH=$DRIVER_BRANCH
+ARG GIT_COMMIT
 
 # Arg to indicate if driver type is either of passthrough/baremetal or vgpu
 ARG DRIVER_TYPE=passthrough
@@ -58,15 +66,9 @@ ENV DISABLE_VGPU_VERSION_CHECK=$DISABLE_VGPU_VERSION_CHECK
 # Avoid dependency of container-toolkit for driver container
 ENV NVIDIA_VISIBLE_DEVICES=void
 
-# getopt etc.
-RUN dnf install -y util-linux 'dnf-command(download)'
+RUN test -n "$DRIVER_VERSION" || { echo "DRIVER_VERSION build arg is required" >&2; exit 1; }
 
 ADD install.sh /tmp/
-
-RUN NVIDIA_GPGKEY_SUM=d0664fbbdb8c32356d45de36c5984617217b2d0bef41b93ccecd326ba3b80c87 && \
-    OS_ARCH=${TARGETARCH/amd64/x86_64} && OS_ARCH=${OS_ARCH/arm64/sbsa} && \
-    curl -fsSL "https://developer.download.nvidia.com/compute/cuda/repos/rhel8/$OS_ARCH/D42D0685.pub" | sed '/^Version/d' > /etc/pki/rpm-gpg/RPM-GPG-KEY-NVIDIA && \
-    echo "$NVIDIA_GPGKEY_SUM  /etc/pki/rpm-gpg/RPM-GPG-KEY-NVIDIA" | sha256sum -c --strict -
 
 RUN sh /tmp/install.sh depinstall && \
     curl -fsSL -o /usr/local/bin/donkey https://github.com/3XX0/donkey/releases/download/v1.1.0/donkey && \
@@ -80,33 +82,16 @@ ADD drivers drivers/
 RUN if [ "$DRIVER_TYPE" != "vgpu" ]; then \
     cd drivers && \
     DRIVER_ARCH=${TARGETARCH/amd64/x86_64} && DRIVER_ARCH=${DRIVER_ARCH/arm64/aarch64} && \
-    curl -fSsl -O $BASE_URL/$DRIVER_VERSION/NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION.run && \
+    curl -fsSL -O $BASE_URL/$DRIVER_VERSION/NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION.run && \
     chmod +x  NVIDIA-Linux-$DRIVER_ARCH-$DRIVER_VERSION.run; fi
-
-# ******************************************************************************
-# REMOVED FABRIC MANAGER RHEL WORK FOR NOW - HAVEN'T ATTEMPTED INCLUSION
-# ******************************************************************************
-# Install fabric-manager packages
-# RUN if [ "$DRIVER_TYPE" != "vgpu" ] && [ "$TARGETARCH" != "arm64" ]; then \
-#     versionArray=(${DRIVER_VERSION//./ }); \
-#     DRIVER_BRANCH=${versionArray[0]}; \
-#     if [ ${versionArray[0]} -ge 470 ] || ([ ${versionArray[0]} == 460 ] && [ ${versionArray[1]} -ge 91 ]); then \
-#       fmPackage=nvidia-fabric-manager-${DRIVER_VERSION}-1; \
-#     else \
-#       fmPackage=nvidia-fabricmanager-${DRIVER_BRANCH}-${DRIVER_VERSION}-1; \
-#     fi; \
-#     nscqPackage=libnvidia-nscq-${DRIVER_BRANCH}-${DRIVER_VERSION}-1; \
-#     dnf module enable -y nvidia-driver:${DRIVER_BRANCH} && \
-#     dnf install -y ${fmPackage} ${nscqPackage}; fi
 
 COPY nvidia-driver /usr/local/bin
 
 WORKDIR /usr/src/nvidia-$DRIVER_VERSION
 
-# COPY ocp_dtk_entrypoint /usr/local/bin
 COPY common.sh /usr/local/bin
 
-COPY --from=build /work/vgpu-util /usr/local/bin
+COPY --from=build /work/vgpu-util* /usr/local/bin/
 
 WORKDIR /drivers
 
@@ -116,25 +101,30 @@ COPY ${PUBLIC_KEY} kernel/pubkey.x509
 ARG PRIVATE_KEY
 ARG KERNEL_VERSION=latest
 
+ARG FEDORA_VERSION
+ARG BUILD_TIMESTAMP
+
 LABEL io.k8s.display-name="NVIDIA Driver Container"
 LABEL name="NVIDIA Driver Container"
 LABEL vendor="NVIDIA"
 LABEL version="${DRIVER_VERSION}"
 LABEL release="N/A"
 LABEL summary="Provision the NVIDIA driver through containers"
-LABEL description="See summary"
+LABEL description="Provision the NVIDIA driver through containers on Fedora ${FEDORA_VERSION}"
+LABEL org.opencontainers.image.base.name="registry.fedoraproject.org/fedora:${FEDORA_VERSION}"
+LABEL org.opencontainers.image.created="${BUILD_TIMESTAMP}"
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
+LABEL org.opencontainers.image.version="${DRIVER_VERSION}-fedora${FEDORA_VERSION}"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 # Add NGC DL license from the CUDA image
-COPY --from=build /NGC-DL-CONTAINER-LICENSE /licenses/NGC-DL-CONTAINER-LICENSE
+COPY --from=cuda /NGC-DL-CONTAINER-LICENSE /licenses/NGC-DL-CONTAINER-LICENSE
 
 # Install / upgrade packages here that are required to resolve CVEs
 ARG CVE_UPDATES
 RUN if [ -n "${CVE_UPDATES}" ]; then \
-        yum update -y ${CVE_UPDATES} && \
-        rm -rf /var/cache/yum/*; \
+        dnf update -y ${CVE_UPDATES} && \
+        dnf clean all; \
     fi
-
-# Remove cuda repository to avoid GPG errors
-RUN rm -f /etc/yum.repos.d/cuda.repo
 
 ENTRYPOINT ["nvidia-driver", "init"]
