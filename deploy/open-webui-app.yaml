@@ -37,8 +37,6 @@ spec:
           # First request waits for llama-swap to load the model
           - name: AIOHTTP_CLIENT_TIMEOUT
             value: "900"
-          - name: ENABLE_OLLAMA_API
-            value: "False"
         persistence:
           enabled: true
           size: 5Gi
