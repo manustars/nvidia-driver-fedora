@@ -28,6 +28,8 @@ spec:
           image: driver
           # The operator appends "-fedora43" from the node's os-release
           version: "595.91.07"
+          # Same tag is rebuilt by CI: always pull the latest build
+          imagePullPolicy: Always
           kernelModuleType: open
           # Modules are compiled at every pod start: give it time
           startupProbe:
