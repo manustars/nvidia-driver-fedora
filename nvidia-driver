@@ -872,5 +872,7 @@ done
 if [ $# -ne 0 ]; then
     usage
 fi
+# An empty value means "make -j" with unlimited jobs, which can OOM small nodes.
+MAX_THREADS=${MAX_THREADS:-$(nproc)}
 
 $command
